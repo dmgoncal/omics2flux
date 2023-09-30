@@ -1,9 +1,15 @@
 import os
+import random
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
+import matplotlib.patches as mpatches
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor
 from utils import replace_strings_with_dictionary_values
+from utils import mae_metric, rmse_metric, ne_metric, r2_metric, get_data, adapt_val_to_train
 
 
 path_to_files = "results/"
@@ -35,38 +41,45 @@ def plot_all_fluxes_holm():
             'axes.titlesize':'x-large',
             'xtick.labelsize':'x-large'}
     
+    plt.rcParams["font.weight"] = "bold"
+    plt.rcParams["axes.labelweight"] = "bold"
     pylab.rcParams.update(params)
 
-    n_cols = 6
-    n_lins = 6
+    n_cols = 3
+    n_lins = 2
     for s in range(0,len(list(true_flux.columns))): # experimental setting (dilution, knockout)
-        fig, axs = plt.subplots(n_lins, n_cols, figsize=(18, 25))
-        for m in range(0,33): # metabolites
+        fig, axs = plt.subplots(n_lins, n_cols, figsize=(20, 20))
+        for m in range(0,6): # metabolites
             axs[m//n_cols, m%n_cols].bar(['True', 'pFBA', 'RF'], 
                         [true_flux.to_numpy()[m,s],
                             pfba_flux.to_numpy()[m,s],
                             rf_flux.to_numpy()[m,s]],
                         color = ['#FFB6C1','#93b2c7','#93b2c7'],
-                        bottom=0, linewidth=0.2, edgecolor='gray', alpha = 0.95, hatch = ['\\\\','',''])
+                        bottom=0, linewidth=20, edgecolor='black', alpha = 1)
             
-            axs[m//n_cols, m%n_cols].set_title(('Growth' if 'biomass' in metabolite_names[m] else metabolite_names[m]))
+            # axs[m//n_cols, m%n_cols].set_title(('Growth' if 'biomass' in metabolite_names[m] else metabolite_names[m]))
             axs[m//n_cols, m%n_cols].set_xticklabels(axs[m//n_cols, m%n_cols].get_xticklabels(), rotation=90)
+            for axis in ['top','bottom','left','right']:
+                axs[m//n_cols, m%n_cols].spines[axis].set_linewidth(30)
 
-            if m//n_cols != 5:
-                axs[m//n_cols, m%n_cols].set_xticks([])
+            # increase tick width
+            axs[m//n_cols, m%n_cols].tick_params(width=20)
+
+            # if m//n_cols != 5:
+            axs[m//n_cols, m%n_cols].set_xticks([])
 
             t = axs[m//n_cols, m%n_cols].yaxis.get_offset_text()
             t.set_x(0.01)
-        axs[-1,-1].set_visible(False)
-        axs[-1,-2].set_visible(False)
-        axs[-1,-3].set_visible(False)
+        # axs[-1,-1].set_visible(False)
+        # axs[-1,-2].set_visible(False)
+        # axs[-1,-3].set_visible(False)
 
         fig.tight_layout(pad=1)
-        fig.text(0.5, 0.05, 'Approach', ha='center', fontsize='x-large')
-        fig.text(0.05, 0.5, 'Flux', va='center', rotation='vertical', fontsize='x-large')
+        # fig.text(0.5, 0.05, 'Approach', ha='center', fontsize='x-large')
+        # fig.text(0.05, 0.5, 'Flux', va='center', rotation='vertical', fontsize='x-large')
 
         plt.subplots_adjust(bottom=0.09,left=0.09)
-        plt.savefig("plots/holm_"+list(true_flux.columns)[s]+".pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("plots/holm_"+list(true_flux.columns)[s]+".png", format="png", bbox_inches="tight", transparent=True)
         plt.clf()
 
 
@@ -329,6 +342,177 @@ def plot_intra_vs_extra_pfba():
     plt.savefig("plots/intravsextra_pfba.pdf", format="pdf", bbox_inches="tight")
 
 
+def plot_flux_error_histogram():
+    '''
+    Plot error histograms by metabolic flux.
+    '''
+    true_flux = pd.read_csv('https://raw.githubusercontent.com/cdanielmachado/transcript2flux/master/datasets/ishii/fluxomics_mmol_per_gDW_per_h.csv', index_col=0).drop(labels=['R_EX_glc_e_','R_EX_o2_e_'], axis=0)
+    pfba_flux = pd.read_csv(path_to_files+'pFBA_ishii.csv', index_col=0)
+    nn_flux = pd.read_csv(path_to_files+'predictions_dl_ishii_prot_fixed_deviations.csv')
+    lr_flux = pd.read_csv(path_to_files+'predictions_lr_ishii_transprot_fixed_nodeviations.csv')
+    svm_flux = pd.read_csv(path_to_files+'predictions_svm_ishii_prot_fixed_nodeviations.csv')
+    dt_flux = pd.read_csv(path_to_files+'predictions_dt_ishii_trans_fixed_nodeviations.csv')
+    rf_flux = pd.read_csv(path_to_files+'predictions_rf_ishii_trans_fixed_nodeviations.csv')
+    xgb_flux = pd.read_csv(path_to_files+'predictions_xgb_ishii_trans_fixed_nodeviations.csv')
+
+    mydict = {'EX_co2_e_':'EX_CO2',
+              'EX_etoh_e_':'EX_Ethanol',
+              'EX_ac_e_':'EX_Acetate',
+              'EX_lac_D_e_':'EX_Lactate',
+              'EX_succ_e_':'EX_Succinate',
+              'EX_pyr_e_':'EX_Pyruvate',
+              'EX_for_e_':'EX_Formate',
+              'Ec_biomass_iAF1260_core_59p81M' : 'Growth'}
+    
+    metabolite_names = replace_strings_with_dictionary_values(list(pfba_flux.index), mydict)
+
+    pfba_mae = mae_metric(true_flux.values,pfba_flux.values)
+    pfba_rmse = rmse_metric(true_flux.values,pfba_flux.values)
+    pfba_ne = ne_metric(true_flux.values,pfba_flux.values)
+    pfba_r2 = r2_metric(true_flux.values,pfba_flux.values)
+
+    pfba_metrics = {'MAE' : pfba_mae, 'RMSE' : pfba_rmse, 'NE' : pfba_ne, 'R²' : pfba_r2}
+
+    for model in [(rf_flux,'RF'), (nn_flux,'DL'), (lr_flux,'LR'), (svm_flux,'SVM'), (dt_flux,'DT'), (xgb_flux,'XGB')]:
+        if model[0].shape[0] == 47:
+            model[0] = model[0].drop(labels=[37,38], axis=0)
+
+        model_mae = mae_metric(true_flux.values,model[0].values)
+        model_rmse = rmse_metric(true_flux.values,model[0].values)
+        model_ne = ne_metric(true_flux.values,model[0].values)
+        model_r2 = r2_metric(true_flux.values,model[0].values)
+
+        metrics = [(model_ne,'NE'),(model_mae,'MAE'),(model_rmse,'RMSE'),(model_r2,'R²')] 
+        for metric,name in metrics:
+            df = pd.DataFrame([metabolite_names, list(pfba_metrics[name]), list(metric)], index=['Fluxes', 'pfba', name]).T
+            
+            plt.figure(figsize=(11, 7)) 
+            ax = sns.barplot(data=df, x="Fluxes", y="pfba", color = '#FDBE88', alpha=0.9, linewidth=0.5, edgecolor='gray', width=0.9)
+            ax = sns.barplot(data=df, x="Fluxes", y=name, color = '#7cacd6', alpha=0.7, width=0.9, linewidth=0.5, edgecolor='gray', hatch='//')
+            plt.xticks(rotation=90)
+            plt.tight_layout()
+            legend_elements = [mpatches.Patch(facecolor='#FDBE88', edgecolor='gray', label='pFBA'),
+                                mpatches.Patch(facecolor='#7cacd6', edgecolor='gray', hatch='//', label=model[1])]
+            plt.legend(handles=legend_elements, loc='upper left')
+
+
+            '''For RF's NE only - cut y axis'''
+            # f, (ax_top, ax_bottom) = plt.subplots(ncols=1, nrows=2, sharex=True, gridspec_kw={'height_ratios': [1, 4],'hspace':0.05},figsize=(11, 7))
+            # sns.barplot(data=df, x="Fluxes", y="pfba", color = '#FDBE88', alpha=0.9, linewidth=0.5, edgecolor='gray', width=0.9, ax=ax_top)
+            # sns.barplot(data=df, x="Fluxes", y="pfba", color = '#FDBE88', alpha=0.9, linewidth=0.5, edgecolor='gray', width=0.9, ax=ax_bottom)
+            # sns.barplot(data=df, x="Fluxes", y=name, color = '#7cacd6', alpha=0.7, width=0.9, linewidth=0.5, edgecolor='gray', hatch='//', ax=ax_top)
+            # sns.barplot(data=df, x="Fluxes", y=name, color = '#7cacd6', alpha=0.7, width=0.9, linewidth=0.5, edgecolor='gray', hatch='//', ax=ax_bottom)
+
+            # ax_top.set_ylim(bottom=25)   # those limits are fake
+            # ax_bottom.set_ylim(0,8)
+
+            # ax_top.spines[['bottom']].set_visible(False)
+            # ax_bottom.spines[['top']].set_visible(False)
+
+            # ax = ax_top
+            # d = .003
+            # kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
+            # ax.plot((-d, +d), (-d, +d), **kwargs)
+
+            # ax2 = ax_bottom
+            # kwargs.update(transform=ax2.transAxes)
+            # ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)
+            # legend_elements = [mpatches.Patch(facecolor='#FDBE88', edgecolor='gray', label='pFBA'),
+            #                     mpatches.Patch(facecolor='#7cacd6', edgecolor='gray', hatch='//', label=model[1])]
+            # ax.legend(handles=legend_elements, loc='upper left')
+            # ax.tick_params(bottom = False)
+            # ax.set_xlabel('')
+            # ax.set_ylabel('')
+            # ax2.set_xticks(ticks=range(len(metabolite_names)),labels=metabolite_names, rotation='vertical')
+
+            plt.savefig("plots/error_histogram_"+model[1]+"_"+name+".pdf", format="pdf", bbox_inches='tight')
+
+
+def plot_learning_curves():
+    '''
+    Plot the learning curves for train (Ishii) and test (Holm) at incrementing training size.
+    '''
+    X_ishii_original, y_ishii_original, _ = get_data('ishii', True, ['transcriptomics'], False)
+    X_holm, y_holm, _ = get_data('holm', True, ['transcriptomics'], False)
+
+    X_holm = adapt_val_to_train(X_ishii_original,X_holm)
+    y_holm = adapt_val_to_train(y_ishii_original,y_holm)
+    
+    X_ishii_mod = X_ishii_original[X_holm.columns].values
+    y_ishii_mod = y_ishii_original[y_holm.columns].values
+    X_holm = X_holm.values
+    y_holm = y_holm.values
+
+    X = X_ishii_original.values
+    y = y_ishii_original.values
+
+    n_runs = 10
+    data_indices = list(range(len(X)))
+    loss_ishii = []
+    model = RandomForestRegressor()
+    for i in range(1, len(X)-1):
+        
+        loss_cv = 0.0
+        for runs in range(n_runs):
+            training_indices = random.sample(data_indices, i)
+            
+            testing_indices = [idx for idx in data_indices if idx not in training_indices]
+            
+            X_train = X[training_indices]
+            y_train = y[training_indices]
+            X_test = X[testing_indices]
+            y_test = y[testing_indices]
+            
+            sc_X = StandardScaler()
+            sc_y = StandardScaler()
+            X_train = sc_X.fit_transform(X_train)
+            y_train = sc_y.fit_transform(y_train)
+            X_test = sc_X.transform(X_test)
+            
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            y_pred = sc_y.inverse_transform(y_pred)
+            loss_cv += np.mean(ne_metric(y_pred, y_test))
+        
+        loss_cv /= n_runs
+        loss_ishii.append(loss_cv)
+    loss_ishii = np.array(loss_ishii)
+    sns.lineplot(x=range(1,len(loss_ishii)+1), y=loss_ishii, label='Ishii')
+    plt.xlabel("N. of training instances")
+    plt.ylabel("NE Loss")
+
+    loss_holm = []
+    data_indices = list(range(len(X_ishii_mod)))
+    for i in range(1, len(X_ishii_mod)-1):
+        
+        loss_cv = 0.0
+        for runs in range(n_runs):
+            training_indices = random.sample(data_indices, i)
+            
+            X_train = X_ishii_mod[training_indices]
+            y_train = y_ishii_mod[training_indices]
+            X_test = X_holm
+            y_test = y_holm
+
+            sc_X = StandardScaler()
+            sc_y = StandardScaler()
+            X_train = sc_X.fit_transform(X_train)
+            y_train = sc_y.fit_transform(y_train)
+            X_test = sc_X.transform(X_test)
+            
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            y_pred = sc_y.inverse_transform(y_pred)
+            loss_cv += np.mean(ne_metric(y_pred, y_test))
+        
+        loss_cv /= n_runs
+        loss_holm.append(loss_cv)
+
+    sns.lineplot(x=range(1,len(loss_holm)+1), y=loss_holm,label='Holm')
+    plt.legend()
+    plt.savefig("plots/train_vs_test_loss.pdf", format="pdf")
+
+
 if __name__ == "__main__":    
     plot_all_fluxes()
     plot_all_fluxes_holm()
@@ -336,3 +520,5 @@ if __name__ == "__main__":
     plot_std_analysis()
     plot_intra_vs_extra_rf()
     plot_intra_vs_extra_pfba()
+    plot_flux_error_histogram()
+    plot_learning_curves()

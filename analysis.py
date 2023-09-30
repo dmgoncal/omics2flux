@@ -26,6 +26,64 @@ rf_flux = pd.read_csv(path_to_files+'predictions_rf_ishii_trans_fixed_nodeviatio
 xgb_flux = pd.read_csv(path_to_files+'predictions_xgb_ishii_trans_fixed_nodeviations.csv').T
 
 
+rf_flux_holm = pd.read_csv(path_to_files+'predictions_holm_rf_trans_fixed_nodeviations.csv').T
+
+
+def detailed_error_analysis_holm():
+    """
+    In depth error analysis (i.e. error by flux (column), error by setting (line), error for extracellular fluxes, error for intracellular fluxes)
+
+    Args:
+        opt (int): An option that dictates what models to consider (only two are implemented, see comments below)
+    """
+    true_flux = true_flux_holm
+    pfba_flux = pfba_flux_holm
+    prediction_list = [pfba_flux, rf_flux_holm]
+    label_list = ['pfba_flux / true','rf_flux / true']
+
+    for p in range(len(prediction_list)):
+        print('\n############################## ' + label_list[p] + ' ##############################')
+
+        print("\n[Error by SETTING (X)]")
+        mae = mae_metric(true_flux.values, prediction_list[p].values)
+        rmse = rmse_metric(true_flux.values, prediction_list[p].values)
+        ne = ne_metric(true_flux.values, prediction_list[p].values)
+        r2 = r2_metric(true_flux.values, prediction_list[p].values)
+        df = pd.DataFrame([mae, rmse, ne, r2], columns = list(true_flux.index), index = ['MAE', 'RMSE', 'NE', 'R²'])
+        print(df)
+
+        print("\n[General Average Error]")
+        print(df.mean(axis=1))
+
+        print("\n[Error by FLUX (Y)]")
+        mae = mae_metric(true_flux.values, prediction_list[p].values, axis = 0) # axis = 0 means average across lines (vertically = fluxes)
+        rmse = rmse_metric(true_flux.values, prediction_list[p].values, axis = 0)
+        ne = ne_metric(true_flux.values, prediction_list[p].values, axis = 0)
+        r2 = r2_metric(true_flux.T.values, prediction_list[p].T.values)
+        df = pd.DataFrame([mae, rmse, ne, r2], columns = pfba_flux.columns, index = ['MAE', 'RMSE', 'NE', 'R²'])
+        print(df)
+
+        print("\n[Average error by INTRA cellular flux]")
+        mae_intra = mae_metric(true_flux.values[:,0:31], prediction_list[p].values[:,0:31])
+        rmse_intra = rmse_metric(true_flux.values[:,0:31], prediction_list[p].values[:,0:31])
+        ne_intra = ne_metric(true_flux.values[:,0:31], prediction_list[p].values[:,0:31])
+        r2_intra = r2_metric(true_flux.values[:,0:31], prediction_list[p].values[:,0:31]) # evaluate intra section from each instance
+        print('MAE intra:', '\t', np.mean(mae_intra), '±', np.std(mae_intra))
+        print('RMSE intra:', '\t', np.mean(rmse_intra), '±', np.std(rmse_intra))
+        print('NE intra:', '\t', np.mean(ne_intra), '±', np.std(ne_intra))
+        print('R² intra:', '\t', np.mean(r2_intra), '±', np.std(r2_intra))
+
+        print("\n[Average error by EXTRA cellular flux]")
+        mae_extra = mae_metric(np.expand_dims(true_flux.values[:,31],axis=0), np.expand_dims(prediction_list[p].values[:,31],axis=0))
+        rmse_extra = rmse_metric(np.expand_dims(true_flux.values[:,31],axis=0), np.expand_dims(prediction_list[p].values[:,31],axis=0))
+        ne_extra = ne_metric(np.expand_dims(true_flux.values[:,31],axis=0), np.expand_dims(prediction_list[p].values[:,31],axis=0))
+        r2_extra = r2_metric(np.expand_dims(true_flux.values[:,31],axis=0), np.expand_dims(prediction_list[p].values[:,31],axis=0)) # evaluate extra section from each instance
+        print('MAE extra:', '\t', np.mean(mae_extra), '±', np.std(mae_extra))
+        print('RMSE extra:', '\t', np.mean(rmse_extra), '±', np.std(rmse_extra))
+        print('NE extra:', '\t', np.mean(ne_extra), '±', np.std(ne_extra))
+        print('R² extra:', '\t', np.mean(r2_extra), '±', np.std(r2_extra))       
+
+
 def detailed_error_analysis(opt=1):
     """
     In depth error analysis (i.e. error by flux (column), error by setting (line), error for extracellular fluxes, error for intracellular fluxes)
@@ -87,10 +145,11 @@ def detailed_error_analysis(opt=1):
         print('MAE extra:', '\t', np.mean(mae_extra), '±', np.std(mae_extra))
         print('RMSE extra:', '\t', np.mean(rmse_extra), '±', np.std(rmse_extra))
         print('NE extra:', '\t', np.mean(ne_extra), '±', np.std(ne_extra))
-        print('R² extra:', '\t', np.mean(r2_extra), '±', np.std(r2_extra))       
+        print('R² extra:', '\t', np.mean(r2_extra), '±', np.std(r2_extra))   
+        print(r2_extra.shape)    
 
 
-def calculate_metrics_overall(sep=','):
+def calculate_metrics_overall(sep=',', serialize=False):
     """
     Wilcoxon Signed Rank Statistical analysis (all vs pFBA - for the ishii dataset only)
     """
@@ -127,12 +186,15 @@ def calculate_metrics_overall(sep=','):
 
         if '_holm' not in m and 'pfba' not in m:
             wil = wilcoxon((pfba_flux_ishii.values-current.values)+epsilon)
+            if serialize:
+                pd.DataFrame([wil.statistic, wil.pvalue], index=['score', 'pvalue'], columns=pfba_flux_ishii.columns).to_csv(path_to_files + 'stat_sig'+m.removeprefix('predictions'))
             print(out_line + sep + '{:.2e}'.format(np.median(wil.pvalue),3))
         else:
             print(out_line)
 
 
 if __name__ == "__main__":
+    detailed_error_analysis_holm()
     detailed_error_analysis(opt=1)
     detailed_error_analysis(opt=2)
     calculate_metrics_overall()
