@@ -32,54 +32,50 @@ def plot_all_fluxes_holm():
               'EX_succ_e_':'EX_Succinate',
               'EX_pyr_e_':'EX_Pyruvate',
               'EX_for_e_':'EX_Formate'}
-    
+
     metabolite_names = replace_strings_with_dictionary_values(list(pfba_flux.index), mydict)
-    
+
     params = {'legend.fontsize': 'x-large',
             'figure.figsize': (15, 5),
             'axes.labelsize': 'x-large',
             'axes.titlesize':'x-large',
             'xtick.labelsize':'x-large'}
-    
-    plt.rcParams["font.weight"] = "bold"
-    plt.rcParams["axes.labelweight"] = "bold"
+
     pylab.rcParams.update(params)
 
-    n_cols = 3
-    n_lins = 2
+    n_cols = 6
+    n_lins = 6
     for s in range(0,len(list(true_flux.columns))): # experimental setting (dilution, knockout)
-        fig, axs = plt.subplots(n_lins, n_cols, figsize=(20, 20))
-        for m in range(0,6): # metabolites
+        fig, axs = plt.subplots(n_lins, n_cols, figsize=(18, 25))
+        for m in range(0,33): # metabolites
             axs[m//n_cols, m%n_cols].bar(['True', 'pFBA', 'RF'], 
                         [true_flux.to_numpy()[m,s],
                             pfba_flux.to_numpy()[m,s],
                             rf_flux.to_numpy()[m,s]],
                         color = ['#FFB6C1','#93b2c7','#93b2c7'],
-                        bottom=0, linewidth=20, edgecolor='black', alpha = 1)
-            
-            # axs[m//n_cols, m%n_cols].set_title(('Growth' if 'biomass' in metabolite_names[m] else metabolite_names[m]))
+                        bottom=0, linewidth=0.2, edgecolor='gray', alpha = 0.95, hatch = ['\\\\','',''])
+
+            axs[m//n_cols, m%n_cols].set_title(('Growth' if 'biomass' in metabolite_names[m] else metabolite_names[m]))
             axs[m//n_cols, m%n_cols].set_xticklabels(axs[m//n_cols, m%n_cols].get_xticklabels(), rotation=90)
-            for axis in ['top','bottom','left','right']:
-                axs[m//n_cols, m%n_cols].spines[axis].set_linewidth(30)
 
-            # increase tick width
-            axs[m//n_cols, m%n_cols].tick_params(width=20)
-
-            # if m//n_cols != 5:
-            axs[m//n_cols, m%n_cols].set_xticks([])
+            if m//n_cols != 5:
+                axs[m//n_cols, m%n_cols].set_xticks([])
 
             t = axs[m//n_cols, m%n_cols].yaxis.get_offset_text()
             t.set_x(0.01)
-        # axs[-1,-1].set_visible(False)
-        # axs[-1,-2].set_visible(False)
-        # axs[-1,-3].set_visible(False)
+        axs[4, -1].set_xticks(['True','pFBA','RF'])
+        axs[4, -2].set_xticks(['True','pFBA','RF'])
+        axs[4, -3].set_xticks(['True','pFBA','RF'])
+        axs[-1,-1].set_visible(False)
+        axs[-1,-2].set_visible(False)
+        axs[-1,-3].set_visible(False)
 
         fig.tight_layout(pad=1)
-        # fig.text(0.5, 0.05, 'Approach', ha='center', fontsize='x-large')
-        # fig.text(0.05, 0.5, 'Flux', va='center', rotation='vertical', fontsize='x-large')
+        fig.text(0.5, 0.05, 'Approach', ha='center', fontsize='x-large')
+        fig.text(0.05, 0.5, 'Flux', va='center', rotation='vertical', fontsize='x-large')
 
         plt.subplots_adjust(bottom=0.09,left=0.09)
-        plt.savefig("plots/holm_"+list(true_flux.columns)[s]+".png", format="png", bbox_inches="tight", transparent=True)
+        plt.savefig("plots/holm_"+list(true_flux.columns)[s]+".pdf", format="pdf", bbox_inches="tight")
         plt.clf()
 
 
@@ -413,10 +409,12 @@ def plot_flux_error_histogram():
             # d = .003
             # kwargs = dict(transform=ax.transAxes, color='k', clip_on=False)
             # ax.plot((-d, +d), (-d, +d), **kwargs)
+            # ax.plot((1 - d, 1 + d), (-d,+d), **kwargs)
 
             # ax2 = ax_bottom
             # kwargs.update(transform=ax2.transAxes)
-            # ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)
+            # ax2.plot((-d, +d), (1.005 - d, 1 + d), **kwargs)
+            # ax2.plot((1 - d, 1 + d), (1.005-d, 1+d), **kwargs)
             # legend_elements = [mpatches.Patch(facecolor='#FDBE88', edgecolor='gray', label='pFBA'),
             #                     mpatches.Patch(facecolor='#7cacd6', edgecolor='gray', hatch='//', label=model[1])]
             # ax.legend(handles=legend_elements, loc='upper left')
@@ -426,6 +424,7 @@ def plot_flux_error_histogram():
             # ax2.set_xticks(ticks=range(len(metabolite_names)),labels=metabolite_names, rotation='vertical')
 
             plt.savefig("plots/error_histogram_"+model[1]+"_"+name+".pdf", format="pdf", bbox_inches='tight')
+            exit()
 
 
 def plot_learning_curves():
