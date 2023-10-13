@@ -1,9 +1,10 @@
-# Omics2Flux
+# ML2Flux
 
-This project aims to predict metabolic fluxes from omics data with machine learning models (moving from a knowledge-driven toward a data-driven approach).
+## About
 
-To know more about this study, please contact:
+This project aims to predict metabolic fluxes from omics data with machine learning models.
 
-- Daniel Gonçalves, dmateusgoncalves@tecnico.ulisboa.pt
-- Rafael Costa, rafael.s.costa@tecnico.ulisboa.pt
-- Rui Henriques, rmch@tecnico.ulisboa.pt
+## File/Content Description
+
+## Citation
+This archive contains results, code and data utilized in the paper: "Predicting metabolic fluxes from omics data via machine learning: Moving from knowledge-driven towards data-driven approaches". Computational and Structural Biotechnology Journal (2023) | DOI: https://doi.org/10.1016/j.csbj.2023.10.002
